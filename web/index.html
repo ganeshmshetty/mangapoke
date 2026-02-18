@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="A sleek manga chapter reader with vertical and single-page modes" />
+  <title>Manga Viewer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+  <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
+</head>
+
+<body>
+  <!-- Loading overlay -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Mobile sidebar backdrop -->
+  <div class="mobile-overlay" id="mobileOverlay"></div>
+
+  <div class="app" id="appRoot">
+
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">
+          <span class="brand-dot"></span>
+          <span>Manga Viewer</span>
+        </div>
+      </div>
+      <div class="search-box">
+        <input type="text" id="chapterSearch" placeholder="Search chapters…" autocomplete="off" />
+      </div>
+      <div class="chapter-list" id="chapterList"></div>
+      <div class="sidebar-footer">
+        <div class="keyboard-hint" id="keyboardHint">
+          Press <kbd>?</kbd> for shortcuts
+        </div>
+      </div>
+    </aside>
+
+    <main class="reader">
+      <div class="progress-bar" id="progressBar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+
+      <header class="reader-bar">
+        <div class="reader-bar-left">
+          <button class="icon-btn" id="sidebarToggle" type="button" title="Toggle sidebar">☰</button>
+          <h1 class="chapter-title" id="chapterTitle">Select a chapter</h1>
+        </div>
+        <div class="reader-controls">
+          <button class="control-btn" id="modeToggle" type="button">
+            <span id="modeLabel">Vertical</span>
+          </button>
+          <button class="icon-btn" id="fullscreenToggle" type="button" title="Toggle fullscreen (F)">
+            <span id="fullscreenIcon">⛶</span>
+          </button>
+          <div class="page-indicator" id="pageIndicator">Page 0 / 0</div>
+        </div>
+      </header>
+
+      <section class="page-stage" id="pageStage">
+        <div class="empty-state">
+          <p>Select a chapter to start reading</p>
+        </div>
+      </section>
+
+      <!-- Floating zoom toolbar -->
+      <div class="zoom-toolbar" id="zoomToolbar">
+        <button class="zoom-btn" id="zoomOutBtn" type="button" title="Zoom out (-)">−</button>
+        <span class="zoom-level" id="zoomLevel">100%</span>
+        <button class="zoom-btn" id="zoomInBtn" type="button" title="Zoom in (+)">+</button>
+        <button class="zoom-btn" id="zoomResetBtn" type="button" title="Reset zoom (0)">⟲</button>
+      </div>
+
+      <footer class="reader-footer">
+        <button class="nav-btn" id="prevButton" type="button">
+          <span>←</span>
+          <span id="prevLabel">Prev</span>
+        </button>
+        <div class="footer-page-count">
+          <span id="footerPageDisplay">Page 0 / 0</span>
+        </div>
+        <button class="nav-btn" id="nextButton" type="button">
+          <span id="nextLabel">Next</span>
+          <span>→</span>
+        </button>
+      </footer>
+    </main>
+  </div>
+
+  <!-- Keyboard shortcuts modal -->
+  <div class="shortcuts-modal" id="shortcutsModal">
+    <div class="shortcuts-content">
+      <div class="shortcuts-header">
+        <h2>Keyboard Shortcuts</h2>
+        <button class="close-btn" id="closeShortcuts" type="button">&times;</button>
+      </div>
+      <div class="shortcuts-grid">
+        <div class="shortcut"><kbd>←</kbd> <kbd>A</kbd> <kbd>K</kbd> <span>Previous page / chapter</span></div>
+        <div class="shortcut"><kbd>→</kbd> <kbd>D</kbd> <kbd>J</kbd> <span>Next page / chapter</span></div>
+        <div class="shortcut"><kbd>M</kbd> <span>Toggle reading mode</span></div>
+        <div class="shortcut"><kbd>G</kbd> <span>Jump to page</span></div>
+        <div class="shortcut"><kbd>H</kbd> <span>Hide / show all UI</span></div>
+        <div class="shortcut"><kbd>S</kbd> <span>Toggle sidebar</span></div>
+        <div class="shortcut"><kbd>F</kbd> <span>Toggle fullscreen</span></div>
+        <div class="shortcut"><kbd>+</kbd> <kbd>-</kbd> <span>Zoom in / out</span></div>
+        <div class="shortcut"><kbd>0</kbd> <span>Reset zoom</span></div>
+        <div class="shortcut"><kbd>/</kbd> <span>Search chapters</span></div>
+        <div class="shortcut"><kbd>?</kbd> <span>Show this dialog</span></div>
+        <div class="shortcut"><kbd>Esc</kbd> <span>Close dialog / exit fullscreen</span></div>
+        <div class="shortcut"
+          style="grid-column: 1 / -1; border-top: 1px solid var(--border); padding-top: 8px; margin-top: 4px;"><span
+            style="color: var(--text-muted); font-size: 11px;">Zoom: Ctrl+Scroll or +/- keys in both modes •
+            Double-tap or H to hide UI • Drag to pan when zoomed</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+
+</html>
