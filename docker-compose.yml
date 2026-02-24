@@ -1,0 +1,13 @@
+services:
+  mangapoke:
+    build: .
+    container_name: mangapoke
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount your manga library here
+      # Replace the left side with the path to your manga folder
+      - ./manga:/manga
+    environment:
+      - MANGA_ROOT=/manga
+    restart: unless-stopped

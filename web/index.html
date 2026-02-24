@@ -24,6 +24,21 @@
 
   <div class="app" id="appRoot">
 
+    <!-- Library overlay -->
+    <div class="library-overlay" id="libraryOverlay">
+      <header class="library-header">
+        <div class="brand">
+          <span class="brand-dot"></span>
+          <span>Manga Library</span>
+        </div>
+      </header>
+      <main class="library-content">
+        <div class="manga-grid" id="mangaGrid">
+          <!-- Manga cards go here -->
+        </div>
+      </main>
+    </div>
+
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
         <div class="brand">
@@ -50,6 +65,7 @@
       <header class="reader-bar">
         <div class="reader-bar-left">
           <button class="icon-btn" id="sidebarToggle" type="button" title="Toggle sidebar">☰</button>
+          <button class="icon-btn" id="backToLibraryBtn" type="button" title="Back to Library">↶</button>
           <h1 class="chapter-title" id="chapterTitle">Select a chapter</h1>
         </div>
         <div class="reader-controls">

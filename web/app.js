@@ -4,18 +4,24 @@
 
 // ==================== API ====================
 const api = {
-  async getChapters() {
-    const res = await fetch("/api/chapters");
+  async getMangas() {
+    const res = await fetch("/api/mangas");
+    if (!res.ok) throw new Error("Failed to load mangas");
+    return res.json();
+  },
+  async getChapters(mangaId) {
+    const res = await fetch(`/api/mangas/${encodeURIComponent(mangaId)}/chapters`);
     if (!res.ok) throw new Error("Failed to load chapters");
     return res.json();
   },
-  async getChapter(chapterId) {
-    const res = await fetch(`/api/chapters/${encodeURIComponent(chapterId)}`);
+  async getChapter(mangaId, chapterId) {
+    const res = await fetch(`/api/mangas/${encodeURIComponent(mangaId)}/chapters/${encodeURIComponent(chapterId)}`);
     if (!res.ok) throw new Error("Failed to load chapter");
     return res.json();
   },
-  async getState() {
-    const res = await fetch("/api/state");
+  async getState(mangaId) {
+    const url = mangaId ? `/api/state?manga_id=${encodeURIComponent(mangaId)}` : "/api/state";
+    const res = await fetch(url);
     if (!res.ok) return { state: null };
     return res.json();
   },
@@ -35,6 +41,9 @@ const dom = {
   sidebar: document.getElementById("sidebar"),
   sidebarToggle: document.getElementById("sidebarToggle"),
   mobileOverlay: document.getElementById("mobileOverlay"),
+  libraryOverlay: document.getElementById("libraryOverlay"),
+  mangaGrid: document.getElementById("mangaGrid"),
+  backToLibraryBtn: document.getElementById("backToLibraryBtn"),
   chapterSearch: document.getElementById("chapterSearch"),
   chapterList: document.getElementById("chapterList"),
   chapterTitle: document.getElementById("chapterTitle"),
@@ -64,6 +73,8 @@ const dom = {
 // ==================== State ====================
 const storageKey = "manga_viewer_state";
 const state = {
+  mangas: [],
+  currentMangaId: null,
   chapters: [],
   currentChapterId: null,
   pages: [],
@@ -137,16 +148,21 @@ function showToast(message, type = "info") {
 }
 
 // ==================== State Persistence ====================
+function localStateKey(mangaId) {
+  return mangaId ? `manga_viewer_state_${mangaId}` : "manga_viewer_state";
+}
+
 function saveLocalState() {
-  if (!state.currentChapterId) return;
+  if (!state.currentMangaId || !state.currentChapterId) return;
   const payload = {
+    manga_id: state.currentMangaId,
     chapter_id: state.currentChapterId,
     page_index: state.currentPageIndex,
     mode: state.mode,
-    ui_hidden: state.uiHidden,
+    ui_hidden: state.uiHidden || false,
     updated_at: Date.now(),
   };
-  localStorage.setItem(storageKey, JSON.stringify(payload));
+  localStorage.setItem(localStateKey(state.currentMangaId), JSON.stringify(payload));
   debounceSaveServer(payload);
 }
 
@@ -157,9 +173,9 @@ function debounceSaveServer(payload) {
   }, 600);
 }
 
-function getLocalState() {
+function getLocalState(mangaId) {
   try {
-    const raw = localStorage.getItem(storageKey);
+    const raw = localStorage.getItem(localStateKey(mangaId));
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -299,7 +315,7 @@ function renderChapterList(filter = "") {
     button.appendChild(countSpan);
 
     button.addEventListener("click", () => {
-      selectChapter(chapter.id, 1);
+      selectChapter(state.currentMangaId, chapter.id, 1);
       closeMobileSidebar();
     });
     dom.chapterList.appendChild(button);
@@ -312,16 +328,117 @@ function renderChapterList(filter = "") {
 function scrollToActiveChapter() {
   const active = dom.chapterList.querySelector(".chapter-item.active");
   if (active) {
-    active.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    const container = dom.chapterList;
+    const activeRect = active.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+
+    if (activeRect.top < containerRect.top) {
+      container.scrollTop -= (containerRect.top - activeRect.top + 8);
+    } else if (activeRect.bottom > containerRect.bottom) {
+      container.scrollTop += (activeRect.bottom - containerRect.bottom + 8);
+    }
+  }
+}
+
+// ==================== Library ====================
+function renderLibrary() {
+  dom.mangaGrid.innerHTML = "";
+  dom.libraryOverlay.classList.remove("hidden");
+  setUIHidden(false); // Make sure UI isn't hidden when going back to library
+
+  if (!state.mangas.length) {
+    dom.mangaGrid.innerHTML = '<div class="empty-state"><p>No manga found in the database.</p></div>';
+    return;
+  }
+
+  state.mangas.forEach((manga) => {
+    const card = document.createElement("div");
+    card.className = "manga-card";
+    // Show a "Continue" badge if there's saved progress for this manga
+    const savedState = getLocalState(manga.id);
+    if (savedState && savedState.chapter_id) {
+      const badge = document.createElement("div");
+      badge.className = "continue-badge";
+      badge.textContent = "Continue Reading";
+      card.appendChild(badge);
+    }
+
+    // Auto-generate some fancy background gradient based on ID
+    const hue = (manga.id.charCodeAt(0) * 15 + manga.id.charCodeAt(manga.id.length - 1) * 20) % 360;
+    const gradient = `linear-gradient(145deg, hsl(${hue}, 60%, 15%), hsl(${(hue + 40) % 360}, 50%, 10%))`;
+
+    // Use the cover image if available, else fallback to gradient
+    if (manga.cover) {
+      // Encode the URL to handle spaces in manga names
+      const encodedCover = manga.cover.split('/').map(part => encodeURIComponent(part)).join('/');
+      card.style.background = `linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.4) 40%, transparent 100%), url('${encodedCover}')`;
+      card.style.backgroundSize = "cover";
+      card.style.backgroundPosition = "center";
+    } else {
+      card.style.background = gradient;
+    }
+
+    card.innerHTML = `
+      <div class="manga-card-content">
+        <h3 class="manga-title">${manga.title}</h3>
+        <p class="manga-meta">${manga.chapter_count} chapters</p>
+      </div>
+      <div class="manga-card-hover">Read Now →</div>
+    `;
+
+    card.addEventListener("click", () => selectManga(manga.id));
+    dom.mangaGrid.appendChild(card);
+  });
+}
+
+function mangaSlug(mangaId) {
+  return mangaId.toLowerCase().replace(/\s+/g, "-");
+}
+
+async function selectManga(mangaId) {
+  showLoading();
+  try {
+    state.currentMangaId = mangaId;
+    const chaptersRes = await api.getChapters(mangaId);
+    state.chapters = chaptersRes.chapters || [];
+
+    dom.libraryOverlay.classList.add("hidden");
+    window.location.hash = `#/${mangaSlug(mangaId)}`;
+    renderChapterList();
+
+    // Check for saved state for this manga (local + server)
+    const [localSt, serverStRes] = await Promise.all([
+      Promise.resolve(getLocalState(mangaId)),
+      api.getState(mangaId),
+    ]);
+    const serverSt = serverStRes.state || null;
+    const saved = resolveState(localSt, serverSt);
+
+    if (saved && saved.chapter_id && state.chapters.some(c => c.id === saved.chapter_id)) {
+      // Restore from saved state
+      await selectChapter(mangaId, saved.chapter_id, saved.page_index || 1);
+    } else if (state.chapters.length) {
+      // No saved state — start from chapter 1
+      await selectChapter(mangaId, state.chapters[0].id, 1);
+    } else {
+      dom.chapterTitle.textContent = "No chapters found";
+      dom.pageStage.innerHTML = '<div class="empty-state"><p>No chapters available for this manga</p></div>';
+    }
+  } catch (err) {
+    showToast("Failed to load manga chapters", "error");
+    console.error(err);
+  } finally {
+    hideLoading();
   }
 }
 
 // ==================== Reader ====================
-async function selectChapter(chapterId, pageIndex) {
+async function selectChapter(mangaId, chapterId, pageIndex) {
   showLoading();
   try {
+    state.currentMangaId = mangaId;
     state.currentChapterId = chapterId;
-    const chapter = await api.getChapter(chapterId);
+    const chapter = await api.getChapter(mangaId, chapterId);
     state.pages = chapter.pages || [];
     state.currentPageIndex = Math.min(Math.max(pageIndex, 1), state.pages.length || 1);
     dom.chapterTitle.textContent = `Chapter ${getChapterTitle(chapterId)}`;
@@ -485,7 +602,10 @@ function renderSinglePage() {
   requestAnimationFrame(() => {
     const activeThumb = strip.querySelector(".thumb-item.active");
     if (activeThumb) {
-      activeThumb.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+      const stripRect = strip.getBoundingClientRect();
+      const thumbRect = activeThumb.getBoundingClientRect();
+      const centerOffset = (stripRect.width / 2) - (thumbRect.width / 2);
+      strip.scrollLeft += (thumbRect.left - stripRect.left) - centerOffset;
     }
   });
 
@@ -545,7 +665,10 @@ function preloadSinglePageNeighbors() {
 function scrollToPage(pageIndex) {
   const target = dom.pageStage.querySelector(`img[data-page-index="${pageIndex}"]`);
   if (target) {
-    target.scrollIntoView({ block: "start", behavior: "auto" });
+    const stage = dom.pageStage;
+    const stageRect = stage.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    stage.scrollTop += (targetRect.top - stageRect.top);
   }
 }
 
@@ -622,14 +745,14 @@ function goToPrev() {
 function goToNextChapter() {
   const index = state.chapters.findIndex((c) => c.id === state.currentChapterId);
   if (index >= 0 && index < state.chapters.length - 1) {
-    selectChapter(state.chapters[index + 1].id, 1);
+    selectChapter(state.currentMangaId, state.chapters[index + 1].id, 1);
   }
 }
 
 function goToPrevChapter() {
   const index = state.chapters.findIndex((c) => c.id === state.currentChapterId);
   if (index > 0) {
-    selectChapter(state.chapters[index - 1].id, 1);
+    selectChapter(state.currentMangaId, state.chapters[index - 1].id, 1);
   }
 }
 
@@ -644,7 +767,7 @@ function preloadAdjacentChapters() {
 
 async function preloadChapterImages(chapterId) {
   try {
-    const chapter = await api.getChapter(chapterId);
+    const chapter = await api.getChapter(state.currentMangaId, chapterId);
     const pages = chapter.pages || [];
     // Preload first 5 images of next chapter
     pages.slice(0, 5).forEach((page) => {
@@ -896,6 +1019,14 @@ function bindEvents() {
 
 
   // Navigation
+  dom.backToLibraryBtn.addEventListener("click", () => {
+    state.currentMangaId = null;
+    state.currentChapterId = null;
+    state.chapters = [];
+    state.pages = [];
+    window.location.hash = "#/home";
+    renderLibrary();
+  });
   dom.prevButton.addEventListener("click", goToPrev);
   dom.nextButton.addEventListener("click", goToNext);
 
@@ -1146,42 +1277,62 @@ function bindEvents() {
   }
 }
 
+// ==================== Routing ====================
+function handleHashChange() {
+  const hash = window.location.hash;
+  if (hash === "#/home" || hash === "" || hash === "#" || hash === "#/") {
+    state.currentMangaId = null;
+    state.currentChapterId = null;
+    state.chapters = [];
+    state.pages = [];
+    renderLibrary();
+    return;
+  }
+  // If the hash matches a manga slug, try to load it
+  const slug = hash.replace("#/", "");
+  if (state.currentMangaId && mangaSlug(state.currentMangaId) === slug) {
+    dom.libraryOverlay.classList.add("hidden");
+    return;
+  }
+  // Try to find a manga matching the slug
+  const matchedManga = state.mangas.find(m => mangaSlug(m.id) === slug);
+  if (matchedManga) {
+    selectManga(matchedManga.id);
+  } else {
+    window.location.hash = "#/home";
+  }
+}
+
 // ==================== Initialization ====================
 async function init() {
   syncViewportHeightVar();
   showLoading();
 
   try {
-    const [chaptersRes, serverStateRes] = await Promise.all([
-      api.getChapters(),
-      api.getState(),
-    ]);
+    const mangasRes = await api.getMangas();
 
-    state.chapters = chaptersRes.chapters || [];
-    renderChapterList();
-
-    const localState = getLocalState();
-    const serverState = serverStateRes.state || null;
-    const chosen = resolveState(localState, serverState);
-
-    if (chosen && chosen.chapter_id) {
-      state.mode = chosen.mode || "vertical";
-      dom.modeLabel.textContent = state.mode === "vertical" ? "Vertical" : "Single";
-      await selectChapter(chosen.chapter_id, chosen.page_index || 1);
-      // Restore UI hidden state
-      if (chosen.ui_hidden) {
-        setUIHidden(true);
-      }
-    } else if (state.chapters.length) {
-      state.mode = "vertical";
-      dom.modeLabel.textContent = "Vertical";
-      await selectChapter(state.chapters[0].id, 1);
-    } else {
-      dom.chapterTitle.textContent = "No chapters found";
-      dom.pageStage.innerHTML = '<div class="empty-state"><p>No manga chapters found in this directory</p></div>';
-    }
+    state.mangas = mangasRes.mangas || [];
 
     bindEvents();
+
+    // Check if the current hash points to a manga — if so, restore directly
+    const currentHash = window.location.hash;
+    const currentSlug = currentHash.replace("#/", "");
+    const matchedManga = currentSlug && currentSlug !== "home"
+      ? state.mangas.find(m => mangaSlug(m.id) === currentSlug)
+      : null;
+
+    if (matchedManga) {
+      // User was on a manga page — restore it
+      renderLibrary(); // render library in background so back button works
+      await selectManga(matchedManga.id);
+    } else {
+      // Show the home/library page
+      window.location.hash = "#/home";
+      renderLibrary();
+    }
+
+    window.addEventListener("hashchange", handleHashChange);
 
     // Collapse sidebar on mobile by default
     if (isMobileViewport()) {

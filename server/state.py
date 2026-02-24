@@ -8,6 +8,7 @@ from typing import Any, Dict
 
 @dataclass
 class ReaderState:
+    manga_id: str
     chapter_id: str
     page_index: int
     mode: str
@@ -27,6 +28,7 @@ def load_state(state_path: Path) -> ReaderState | None:
 
     try:
         return ReaderState(
+            manga_id=str(data.get("manga_id", "")),
             chapter_id=str(data.get("chapter_id", "")),
             page_index=int(data.get("page_index", 1)),
             mode=str(data.get("mode", "vertical")),
@@ -38,6 +40,7 @@ def load_state(state_path: Path) -> ReaderState | None:
 
 def save_state(state_path: Path, payload: Dict[str, Any]) -> ReaderState:
     state = ReaderState(
+        manga_id=str(payload.get("manga_id", "")),
         chapter_id=str(payload.get("chapter_id", "")),
         page_index=int(payload.get("page_index", 1)),
         mode=str(payload.get("mode", "vertical")),
